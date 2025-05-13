@@ -13,7 +13,7 @@ const userSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
-// Middleware untuk set allowedCategories sebelum save
+// Middleware for set allowedCategories before save
 userSchema.pre('save', function(next) {
   if (this.isModified('age')) {
     if (this.age >= 3 && this.age <= 12) {
@@ -34,7 +34,6 @@ userSchema.pre('save', async function(next) {
   next();
 });
 
-// Method untuk compare password
 userSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
