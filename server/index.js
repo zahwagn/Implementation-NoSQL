@@ -1,41 +1,39 @@
-require("dotenv").config()
+require("dotenv").config();
 
-const express = require("express") // Importing express package 
-const cors = require("cors") // Importing cors package
-const { dbConnect } = require("./config/dbConnect") //  dbConnect() - Database Connection
+const mediaRoutes = require('./routes/media.route');
+const authRoutes = require('./routes/auth.route');
+const express = require('express');
+const cors = require('cors');
+const db = require('./config/db');
 
-// Importing Routes
-const todoRoutes = require("./routes/TodoRoutes")
-const userRoutes = require("./routes/UserRoutes")
+const port = process.env.PORT;
+const app = express();
 
-const app = express()
-const PORT = process.env.PORT || 5000
+// connect to database
+db.connectDB();
 
-/**
- * Middlewares
- *      - express.json() - To handle (parse) the json data coming in request 
- *      - express.urlencoded({extended: true}) - To handle data coming from URL in encoded format
- *      - cors - To handle cross origin requests
- */
-app.use(express.json())
-app.use(express.urlencoded({extended: true}))
-app.use(cors())
+app.use("/auth", authRoutes);
+app.use("/media", mediaRoutes);
 
-// testing 
-app.get("/", (req, res)=>{
-    res.status(200).json({
-        success: true,
-        message: "Homepage"
+// middlewares
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(
+    cors({
+        methods: "GET,POST,PUT,DELETE",
+        credentials: true
     })
+);
+
+// status
+app.get('/status', (req, res) => {
+    res.status(200).send({ status: "Server is running" });
 })
 
-// redirect /user to userRoutes and /todo to todoRoutes
-app.use("/todo", todoRoutes)
-app.use("/user", userRoutes)
+// media routes
+app.use("/media", mediaRoutes);
 
-dbConnect() // connect database
+app.listen(port, () => {
+    console.log(`🚀 Server is running on PORT ${port}`);
+});
 
-// Run server
-app.listen(PORT, () => {
-    console.log(`🚀 Server is running on PORT ${PORT}`)
-})
