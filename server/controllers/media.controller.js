@@ -3,7 +3,7 @@ const baseResponse = require('../utils/baseResponse');
 
 exports.getAllMedia = async (req, res) => {
   try {
-    // Jika user terautentikasi, filter berdasarkan kategori yang diizinkan
+    // Jika user terautentikasi filter based on categories
     const filters = {};
     if (req.user) {
       filters.ageCategory = { $in: req.user.allowedCategories };
@@ -35,8 +35,9 @@ exports.getMediaById = async (req, res) => {
 };
 
 exports.createMedia = async (req, res) => {
-  const { title, type, status, rating, review } = req.body;
+  const { title, type, status, ageCategory, rating, review } = req.body;
   const image = req.file;
+  const validCategories = ['all', 'kids', 'teen', 'adult'];
   
   // Validate required fields
   if (!title || !type || !status) {
@@ -53,16 +54,21 @@ exports.createMedia = async (req, res) => {
     return baseResponse(res, false, 400, "Status must be 'watched', 'read', or 'plan'", null);
   }
   
-  // Validate rating if provided
+  // Validate rating if for develop
   if (rating && (rating < 1 || rating > 5)) {
     return baseResponse(res, false, 400, "Rating must be between 1 and 5", null);
   }
   
+  // Validate age
+  if (!ageCategory || !validCategories.includes(ageCategory)) {
+    return baseResponse(res, false, 400, "Valid age category is required (all, kids, teen, adult)");
+  }
   try {
     const media = await mediaRepository.createMedia({
       title,
       type,
       status,
+      ageCategory, 
       rating: rating || null,
       review: review || null
     }, image);
@@ -188,10 +194,8 @@ exports.addVenue = async (req, res) => {
   const { mediaId, venueData } = req.body;
   
   try {
-    // First create the venue
     const venue = await mediaRepository.createVenue(venueData);
     
-    // Then add it to the media
     const media = await mediaRepository.addVenueToMedia(mediaId, venue._id);
     
     return baseResponse(res, true, 200, "Venue added successfully", { media, venue });

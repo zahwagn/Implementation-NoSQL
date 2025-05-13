@@ -22,9 +22,20 @@ exports.updateMedia = async (id, mediaData) => {
 exports.deleteMedia = async (id) => {
   return await Media.findByIdAndDelete(id);
 };
-
-exports.filterMedia = async (type, filters = {}) => {
-  return await Media.find({ type, ...filters }).sort({ createdAt: -1 }).populate('venues');
+exports.filterMedia = async (filters = {}) => {
+  let query = {};
+  
+  if (filters.type) {
+    query.type = filters.type;
+  }
+  
+  if (filters.ageCategory) {
+    query.ageCategory = filters.ageCategory;
+  }
+  
+  return await Media.find(query)
+    .sort({ createdAt: -1 })
+    .populate('venues');
 };
 
 exports.getCurrentBillboard = async () => {
@@ -39,11 +50,25 @@ exports.getCurrentBillboard = async () => {
 };
 
 exports.incrementViewCount = async (id) => {
-  return await Media.findByIdAndUpdate(
+  const media = await Media.findByIdAndUpdate(
     id, 
     { $inc: { viewCount: 1 } }, 
     { new: true }
   );
+    const currentDate = new Date();
+  const week = Math.ceil((currentDate.getDate() + currentDate.getDay()) / 7);
+  const year = currentDate.getFullYear();
+
+  await Billboard.findOneAndUpdate(
+    { media: id, week, year },
+    { 
+      $inc: { viewCount: 1 },
+      $setOnInsert: { media: id, week, year } 
+    },
+    { upsert: true, new: true }
+  );
+
+  return media;
 };
 
 exports.addVenueToMedia = async (mediaId, venueId) => {

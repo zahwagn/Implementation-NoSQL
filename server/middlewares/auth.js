@@ -27,7 +27,7 @@ exports.authorize = (roles = []) => {
 };
 
 exports.checkAgeRestriction = (req, res, next) => {
-  // Untuk endpoint GET media, periksa kategori usia
+  // GET media checked on kategori usia
   if (req.method === 'GET' && req.originalUrl.includes('/media')) {
     const { ageCategory } = req.query;
     
