@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
-const { authenticate, authorize } = require('../middlewares/auth');
+const { authenticate, checkAgeRestriction } = require('../middlewares/auth');
 const mediaController = require('../controllers/media.controller');
 
 const storage = multer.diskStorage({
@@ -28,19 +28,16 @@ const upload = multer({
 });
 
 // Public routes
-router.get('/', mediaController.getAllMedia);
-router.get('/:id', mediaController.getMediaById);
-router.get('/filter/:type', mediaController.filterMedia);
+router.get('/', authenticate, checkAgeRestriction, mediaController.getAllMedia);
+router.get('/:id', authenticate, mediaController.getMediaById);
+router.get('/filter/:type', authenticate, checkAgeRestriction, mediaController.filterMedia);
 router.get('/billboard/current', mediaController.getCurrentBillboard);
 
 // Routes to  for protected
 router.post('/', authenticate, upload.single('image'), mediaController.createMedia);
 router.put('/:id', authenticate, upload.single('image'), mediaController.updateMedia);
 router.delete('/:id', authenticate, mediaController.deleteMedia);
-router.put('/:id/view', mediaController.incrementViewCount);
 router.post('/:id/venues', authenticate, mediaController.addVenue);
-router.get('/age/:ageCategory', mediaController.getMediaByAgeCategory);
-router.get('/', authenticate, checkAgeRestriction, mediaController.getAllMedia);
-router.get('/:id', authenticate, checkAgeRestriction, mediaController.getMediaById);
+router.post('/:id/view', authenticate, mediaController.incrementViewCount);
 
 module.exports = router;

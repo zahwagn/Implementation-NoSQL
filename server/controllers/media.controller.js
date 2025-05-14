@@ -4,9 +4,13 @@ const baseResponse = require('../utils/baseResponse');
 exports.getAllMedia = async (req, res) => {
   try {
     // Jika user terautentikasi filter based on categories
+    const { minRating } = req.query;
     const filters = {};
     if (req.user) {
-      filters.ageCategory = { $in: req.user.allowedCategories };
+      filters.ageCategory = { $in: req.user.allowedCategories || ['kids'] };
+    }
+    if (minRating) {
+      filters.rating = { $gte: parseInt(minRating) };
     }
     
     const media = await mediaRepository.getAllMedia(filters);
@@ -50,11 +54,13 @@ exports.createMedia = async (req, res) => {
   }
   
   // Validate status
-  if (status !== 'watched' && status !== 'plan' && status !== 'read') {
-    return baseResponse(res, false, 400, "Status must be 'watched', 'read', or 'plan'", null);
+ if (status === 'watched' || status === 'read' || status === 'completed') {
+  if (!rating) {
+    return baseResponse(res, false, 400, "Rating is required for watched/read/completed items");
   }
+}
   
-  // Validate rating if for develop
+  // Validate rating 
   if (rating && (rating < 1 || rating > 5)) {
     return baseResponse(res, false, 400, "Rating must be between 1 and 5", null);
   }
@@ -90,12 +96,12 @@ exports.updateMedia = async (req, res) => {
     return baseResponse(res, false, 400, "Type must be either 'movie' or 'book'", null);
   }
   
-  // Validate status if provided
-  if (status && status !== 'watched' && status !== 'plan' && status !== 'read') {
-    return baseResponse(res, false, 400, "Status must be 'watched', 'read', or 'plan'", null);
-  }
+  // Validate status
+if ((status === 'watched' || status === 'read' || status === 'completed') && !rating) {
+  return baseResponse(res, false, 400, "Rating is required for watched/read/completed items");
+}
   
-  // Validate rating if provided
+  // Validate rating 
   if (rating && (rating < 1 || rating > 5)) {
     return baseResponse(res, false, 400, "Rating must be between 1 and 5", null);
   }
@@ -191,13 +197,16 @@ exports.incrementViewCount = async (req, res) => {
 };
 
 exports.addVenue = async (req, res) => {
-  const { mediaId, venueData } = req.body;
+  const mediaId = req.params.id; 
+  const venueData = {
+    name: req.body.name,
+    type: req.body.type,
+    location: req.body.location
+  };
   
   try {
     const venue = await mediaRepository.createVenue(venueData);
-    
     const media = await mediaRepository.addVenueToMedia(mediaId, venue._id);
-    
     return baseResponse(res, true, 200, "Venue added successfully", { media, venue });
   } catch (error) {
     console.error("Error adding venue:", error);

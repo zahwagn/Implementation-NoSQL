@@ -27,8 +27,17 @@ exports.authorize = (roles = []) => {
 };
 
 exports.checkAgeRestriction = (req, res, next) => {
-  // GET media checked on kategori usia
-  if (req.method === 'GET' && req.originalUrl.includes('/media')) {
+  // Pastikan user terautentikasi
+  if (!req.user) {
+    return next();
+  }
+
+  if (!req.user.allowedCategories) {
+    req.user.allowedCategories = ['kids'];
+    return baseResponse(res, false, 403, "User categories not defined");
+  }
+
+  if (req.method === 'GET' && req.path.includes('/media')) {
     const { ageCategory } = req.query;
     
     if (ageCategory && !req.user.allowedCategories.includes(ageCategory)) {
@@ -36,7 +45,7 @@ exports.checkAgeRestriction = (req, res, next) => {
         res, 
         false, 
         403, 
-        `Access denied. Your age group (${req.user.age}) doesn't have access to this category`
+        `Access denied. Your age group doesn't have access to ${ageCategory} category`
       );
     }
   }

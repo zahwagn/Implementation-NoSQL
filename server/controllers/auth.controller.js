@@ -35,15 +35,12 @@ exports.register = async (req, res) => {
     await user.save();
     
     // Generate token
-    const token = jwt.sign(
-      { 
-        id: user._id, 
-        role: user.role,
-        allowedCategories: user.allowedCategories 
-      }, 
-      process.env.JWT_SECRET, 
-      { expiresIn: '1d' }
-    );
+const token = jwt.sign({
+  id: user._id,
+  age: user.age,
+  allowedCategories: user.allowedCategories, 
+  role: user.role
+}, process.env.JWT_SECRET, { expiresIn: '1d' });
     
     return baseResponse(res, true, 201, "User registered successfully", { 
       user: { 
@@ -86,11 +83,16 @@ exports.login = async (req, res) => {
     }
     
     // Generate token
-    const token = jwt.sign(
-      { id: user._id, role: user.role }, 
-      process.env.JWT_SECRET, 
+      const token = jwt.sign(
+      { 
+        id: user._id, 
+        role: user.role,
+        age: user.age,
+        allowedCategories: user.allowedCategories 
+      }, 
+      process.env.JWT_SECRET,
       { expiresIn: '1d' }
-    );
+    )
     
     return baseResponse(res, true, 200, "Login successful", { 
       user: { id: user._id, username: user.username, email: user.email, role: user.role },
