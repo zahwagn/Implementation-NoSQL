@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
-const { authenticate, checkAgeRestriction } = require('../middlewares/auth');
+const { authenticate, requireLogin, checkAgeRestriction, checkCategoryAccess } = require('../middlewares/auth');
 const mediaController = require('../controllers/media.controller');
 
 const storage = multer.diskStorage({
@@ -27,17 +27,18 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB
 });
 
-// Public routes
+// READ untuk guest & user
 router.get('/', authenticate, checkAgeRestriction, mediaController.getAllMedia);
-router.get('/:id', authenticate, mediaController.getMediaById);
+router.get('/:id', authenticate, checkAgeRestriction, mediaController.getMediaById);
 router.get('/filter/:type', authenticate, checkAgeRestriction, mediaController.filterMedia);
-router.get('/billboard/current', mediaController.getCurrentBillboard);
+router.get('/billboard/current', authenticate, checkAgeRestriction, mediaController.getCurrentBillboard);
+router.get('/category/:ageCategory', authenticate, checkAgeRestriction, mediaController.getMediaByAgeCategory);
 
-// Routes to  for protected
-router.post('/', authenticate, upload.single('image'), mediaController.createMedia);
-router.put('/:id', authenticate, upload.single('image'), mediaController.updateMedia);
-router.delete('/:id', authenticate, mediaController.deleteMedia);
-router.post('/:id/venues', authenticate, mediaController.addVenue);
-router.post('/:id/view', authenticate, mediaController.incrementViewCount);
+// CREATE, UPDATE, DELETE operations hanya untuk user
+router.post('/', authenticate, requireLogin, checkCategoryAccess, upload.single('image'), mediaController.createMedia);
+router.put('/:id', authenticate, requireLogin, checkCategoryAccess, upload.single('image'), mediaController.updateMedia);
+router.delete('/:id', authenticate, requireLogin, checkCategoryAccess, mediaController.deleteMedia);
+router.post('/:id/venues', authenticate, requireLogin, checkCategoryAccess, mediaController.addVenue);
+router.post('/:id/view', authenticate, requireLogin, checkAgeRestriction, mediaController.incrementViewCount);
 
 module.exports = router;

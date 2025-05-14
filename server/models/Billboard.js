@@ -9,7 +9,6 @@ const billboardSchema = new mongoose.Schema({
   lastUpdated: { type: Date, default: Date.now }
 });
 
-// Auto-update rank
 billboardSchema.pre('save', async function(next) {
   if (this.isModified('viewCount')) {
     const currentWeekBillboards = await this.constructor.find({ 

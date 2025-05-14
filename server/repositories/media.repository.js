@@ -2,26 +2,79 @@ const Media = require('../models/Media');
 const Billboard = require('../models/Billboard');
 const Venue = require('../models/Venue');
 
+exports.countMedia = async () => {
+  return await Media.countDocuments();
+};
+
+exports.getAllMediaNoFilter = async () => {
+  return await Media.find({}).sort({ createdAt: -1 }).populate('venues');
+};
+
 exports.getAllMedia = async (filters = {}) => {
-  return await Media.find(filters).sort({ createdAt: -1 }).populate('venues');
+  try {
+    console.log("Repository filters:", JSON.stringify(filters));
+    
+    if (filters.ageCategory && filters.ageCategory.$in) {
+      console.log("Filtering by age categories:", filters.ageCategory.$in);
+    } else if (filters.ageCategory) {
+      console.log("Filtering by specific age category:", filters.ageCategory);
+    }
+    
+    const query = Media.find(filters).sort({ createdAt: -1 });
+    console.log("Query:", query.getFilter());
+    
+    const media = await query.populate('venues');
+    
+    console.log(`Repository found ${media.length} media items`);
+    if (media.length > 0) {
+      console.log("Sample media:", {
+        title: media[0].title,
+        type: media[0].type,
+        ageCategory: media[0].ageCategory
+      });
+    }
+    
+    return media;
+  } catch (error) {
+    console.error("Error in repository getAllMedia:", error);
+    throw error;
+  }
 };
 
 exports.getMediaById = async (id) => {
   return await Media.findById(id).populate('venues');
 };
 
-exports.createMedia = async (mediaData) => {
+exports.createMedia = async (mediaData, image = null) => {
+  if (image) {
+    mediaData.imageUrl = `/uploads/${image.filename}`;
+  }
+  
   const media = new Media(mediaData);
   return await media.save();
 };
 
-exports.updateMedia = async (id, mediaData) => {
-  return await Media.findByIdAndUpdate(id, mediaData, { new: true }).populate('venues');
+exports.updateMedia = async (id, mediaData, image = null) => {
+  if (image) {
+    mediaData.imageUrl = `/uploads/${image.filename}`;
+  }
+  
+  Object.keys(mediaData).forEach(key => {
+    if (mediaData[key] === undefined) {
+      delete mediaData[key];
+    }
+  });
+  
+  return await Media.findByIdAndUpdate(id, 
+    { ...mediaData, updatedAt: Date.now() }, 
+    { new: true }
+  ).populate('venues');
 };
 
 exports.deleteMedia = async (id) => {
   return await Media.findByIdAndDelete(id);
 };
+
 exports.filterMedia = async (filters = {}) => {
   let query = {};
   
@@ -30,8 +83,14 @@ exports.filterMedia = async (filters = {}) => {
   }
   
   if (filters.ageCategory) {
-    query.ageCategory = filters.ageCategory;
+    if (typeof filters.ageCategory === 'object' && filters.ageCategory.$in) {
+      query.ageCategory = { $in: filters.ageCategory.$in };
+    } else {
+      query.ageCategory = filters.ageCategory;
+    }
   }
+  
+  console.log("Filter query:", JSON.stringify(query));
   
   return await Media.find(query)
     .sort({ createdAt: -1 })
@@ -46,7 +105,10 @@ exports.getCurrentBillboard = async () => {
   return await Billboard.find({ week, year })
     .sort({ rank: 1 })
     .limit(5)
-    .populate('media');
+    .populate({
+      path: 'media',
+      model: 'Media'
+    });
 };
 
 exports.incrementViewCount = async (id) => {
@@ -55,7 +117,8 @@ exports.incrementViewCount = async (id) => {
     { $inc: { viewCount: 1 } }, 
     { new: true }
   );
-    const currentDate = new Date();
+  
+  const currentDate = new Date();
   const week = Math.ceil((currentDate.getDate() + currentDate.getDay()) / 7);
   const year = currentDate.getFullYear();
 
