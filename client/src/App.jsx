@@ -1,38 +1,30 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
-import Navbar from './components/Navbar'
-import Footer from './components/Footer'
-import Home from './pages/Home'
-import Movies from './pages/Movies'
-import Books from './pages/Books'
-import Reviews from './pages/Reviews'
-import Billboard from './pages/Billboard'
-import Login from './pages/Auth/Login'
-import Register from './pages/Auth/Register'
-import ProtectedRoute from './components/ProtectedRoute'
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Navbar from './components/Navbar';
+import Footer from './components/Footer';
+import HomePage from './pages/HomePage';
+import BookPage from './pages/BookPage';
+import FilmPage from './pages/FilmPage';
+import BillboardPage from './pages/BillboardPage';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
 
 function App() {
   return (
     <Router>
-      <div className="flex flex-col min-h-screen">
-        <Navbar />
-        <main className="flex-grow">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/movies" element={<Movies />} />
-            <Route path="/books" element={<Books />} />
-            <Route path="/reviews" element={<Reviews />} />
-            <Route path="/billboard" element={<Billboard />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route element={<ProtectedRoute />}>
-              <Route path="/profile" element={<div>Profile Page</div>} />
-            </Route>
-          </Routes>
-        </main>
-        <Footer />
+      <Navbar />
+      <div className="min-h-[80vh]">
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/books" element={<BookPage />} />
+          <Route path="/films" element={<FilmPage />} />
+          <Route path="/billboard" element={<BillboardPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+        </Routes>
       </div>
+      <Footer />
     </Router>
-  )
+  );
 }
 
-export default App
+export default App;
