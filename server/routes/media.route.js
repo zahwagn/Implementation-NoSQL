@@ -27,17 +27,29 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB
 });
 
-// Public routes
-router.get('/', authenticate, checkAgeRestriction, mediaController.getAllMedia);
-router.get('/:id', authenticate, mediaController.getMediaById);
-router.get('/filter/:type', authenticate, checkAgeRestriction, mediaController.filterMedia);
+// Public routes (accessible to guests)
+router.get('/', async (req, res, next) => {
+  try {
+    // Try to authenticate but continue if no token
+    const authHeader = req.header('Authorization');
+    if (authHeader) {
+      authenticate(req, res, next);
+    } else {
+      next();
+    }
+  } catch (error) {
+    next();
+  }
+}, mediaController.getAllMedia);
+router.get('/:id', mediaController.getMediaById);
+router.get('/filter/:type', mediaController.filterMedia);
 router.get('/billboard/current', mediaController.getCurrentBillboard);
 
-// Routes to  for protected
+// Protected routes (require authentication)
 router.post('/', authenticate, upload.single('image'), mediaController.createMedia);
 router.put('/:id', authenticate, upload.single('image'), mediaController.updateMedia);
 router.delete('/:id', authenticate, mediaController.deleteMedia);
 router.post('/:id/venues', authenticate, mediaController.addVenue);
-router.post('/:id/view', authenticate, mediaController.incrementViewCount);
+router.post('/tickets/purchase', authenticate, mediaController.purchaseTicket);
 
 module.exports = router;
