@@ -1,13 +1,77 @@
 const Media = require('../models/Media');
 const Billboard = require('../models/Billboard');
 const Venue = require('../models/Venue');
+const Ticket = require('../models/Ticket');
 
-exports.getAllMedia = async (filters = {}) => {
-  return await Media.find(filters).sort({ createdAt: -1 }).populate('venues');
+exports.getAllMedia = async (filters = {}, isGuest = false) => {
+  const query = {};
+  
+  // Guest can only see kids content
+  if (isGuest) {
+    query.ageCategory = 'kids';
+  } 
+  // Authenticated users can see content based on their allowed categories
+  else if (filters.ageCategories && filters.ageCategories.length > 0) {
+    query.ageCategory = { $in: filters.ageCategories };
+  }
+  
+  // Apply other filters
+  if (filters.minRating) {
+    query.rating = { $gte: Number(filters.minRating) };
+  }
+  
+  if (filters.status) {
+    query.status = filters.status;
+  }
+  
+  if (filters.availableAtVenue) {
+    const venues = await Venue.find({ isAvailable: true }).distinct('media');
+    query._id = { $in: venues };
+  }
+  
+  if (filters.search) {
+    query.$or = [
+      { title: { $regex: filters.search, $options: 'i' } },
+      { review: { $regex: filters.search, $options: 'i' } }
+    ];
+  }
+  
+  const sortOptions = {};
+  if (filters.sortBy) {
+    if (filters.sortBy === 'newest') {
+      sortOptions.createdAt = -1;
+    } else if (filters.sortBy === 'rating') {
+      sortOptions.rating = -1;
+    } else if (filters.sortBy === 'views') {
+      sortOptions.viewCount = -1;
+    }
+  }
+
+  return await Media.find(query)
+    .sort(sortOptions)
+    .populate({
+      path: 'venues',
+      match: { isAvailable: true }
+    });
 };
 
-exports.getMediaById = async (id) => {
-  return await Media.findById(id).populate('venues');
+exports.getMediaById = async (id, filters = {}) => {
+  const query = { _id: id };
+  
+  if (filters.minRating) {
+    query.rating = { $gte: Number(filters.minRating) };
+  }
+  
+  if (filters.availableAtVenue) {
+    const venues = await Venue.find({ isAvailable: true }).distinct('media');
+    query._id = { $in: venues };
+  }
+  
+  return await Media.findOne(query)
+    .populate({
+      path: 'venues',
+      match: { isAvailable: true }
+    });
 };
 
 exports.createMedia = async (mediaData) => {
@@ -22,9 +86,16 @@ exports.updateMedia = async (id, mediaData) => {
 exports.deleteMedia = async (id) => {
   return await Media.findByIdAndDelete(id);
 };
-exports.filterMedia = async (filters = {}) => {
-  let query = {};
+
+exports.filterMedia = async (filters = {}, isGuest = false) => {
+  const query = {};
   
+  // Apply guest restrictions
+  if (isGuest) {
+    query.ageCategory = 'kids';
+  }
+  
+  // Apply other filters
   if (filters.type) {
     query.type = filters.type;
   }
@@ -33,42 +104,123 @@ exports.filterMedia = async (filters = {}) => {
     query.ageCategory = filters.ageCategory;
   }
   
+  if (filters.minRating) {
+    query.rating = { $gte: Number(filters.minRating) };
+  }
+  
+  if (filters.status) {
+    query.status = filters.status;
+  }
+  
+  if (filters.availableAtVenue) {
+    const venues = await Venue.find({ isAvailable: true }).distinct('media');
+    query._id = { $in: venues };
+  }
+  
+  if (filters.search) {
+    query.$or = [
+      { title: { $regex: filters.search, $options: 'i' } },
+      { review: { $regex: filters.search, $options: 'i' } }
+    ];
+  }
+  
+  const sortOptions = {};
+  if (filters.sortBy) {
+    if (filters.sortBy === 'newest') {
+      sortOptions.createdAt = -1;
+    } else if (filters.sortBy === 'rating') {
+      sortOptions.rating = -1;
+    } else if (filters.sortBy === 'views') {
+      sortOptions.viewCount = -1;
+    }
+  }
+  
   return await Media.find(query)
-    .sort({ createdAt: -1 })
-    .populate('venues');
+    .sort(sortOptions)
+    .populate({
+      path: 'venues',
+      match: { isAvailable: true }
+    });
 };
 
-exports.getCurrentBillboard = async () => {
+exports.getCurrentBillboard = async (filters = {}) => {
   const currentDate = new Date();
   const week = Math.ceil((currentDate.getDate() + currentDate.getDay()) / 7);
   const year = currentDate.getFullYear();
   
-  return await Billboard.find({ week, year })
-    .sort({ rank: 1 })
-    .limit(5)
-    .populate('media');
+  // Calculate ticket sales for the current week
+  const startOfWeek = new Date(currentDate.setDate(currentDate.getDate() - currentDate.getDay()));
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(endOfWeek.getDate() + 7);
+  
+  const topMedia = await Ticket.aggregate([
+    {
+      $match: {
+        purchaseDate: { $gte: startOfWeek, $lt: endOfWeek },
+        status: 'completed'
+      }
+    },
+    {
+      $group: {
+        _id: '$media',
+        totalTickets: { $sum: '$quantity' },
+        totalRevenue: { $sum: '$totalPrice' }
+      }
+    },
+    { $sort: { totalTickets: -1 } },
+    { $limit: 5 }
+  ]);
+  
+  // Get media details for the top selling media
+  const mediaIds = topMedia.map(item => item._id);
+  const mediaDetails = await Media.find({ _id: { $in: mediaIds } })
+    .populate({
+      path: 'venues',
+      match: { isAvailable: true }
+    });
+  
+  // Combine ticket data with media details
+  const billboardData = mediaDetails.map(media => {
+    const ticketData = topMedia.find(item => item._id.equals(media._id));
+    return {
+      media,
+      rank: topMedia.findIndex(item => item._id.equals(media._id)) + 1,
+      totalTickets: ticketData.totalTickets,
+      totalRevenue: ticketData.totalRevenue
+    };
+  });
+  
+  return billboardData;
 };
 
-exports.incrementViewCount = async (id) => {
-  const media = await Media.findByIdAndUpdate(
-    id, 
-    { $inc: { viewCount: 1 } }, 
-    { new: true }
-  );
-    const currentDate = new Date();
-  const week = Math.ceil((currentDate.getDate() + currentDate.getDay()) / 7);
-  const year = currentDate.getFullYear();
-
-  await Billboard.findOneAndUpdate(
-    { media: id, week, year },
-    { 
-      $inc: { viewCount: 1 },
-      $setOnInsert: { media: id, week, year } 
-    },
-    { upsert: true, new: true }
-  );
-
-  return media;
+exports.purchaseTicket = async (userId, mediaId, venueId, quantity) => {
+  const venue = await Venue.findById(venueId);
+  if (!venue || !venue.isAvailable) {
+    throw new Error('Venue is not available');
+  }
+  
+  if (venue.availableSeats < quantity) {
+    throw new Error('Not enough available seats');
+  }
+  
+  // Create ticket
+  const totalPrice = venue.price * quantity;
+  const ticket = new Ticket({
+    user: userId,
+    media: mediaId,
+    venue: venueId,
+    quantity,
+    totalPrice
+  });
+  
+  // Update venue available seats
+  venue.availableSeats -= quantity;
+  await venue.save();
+  
+  // Save ticket
+  await ticket.save();
+  
+  return ticket;
 };
 
 exports.addVenueToMedia = async (mediaId, venueId) => {
