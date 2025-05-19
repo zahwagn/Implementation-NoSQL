@@ -9,7 +9,7 @@ exports.getAllMedia = async (req, res) => {
       availableAtVenue: req.query.availableAtVenue === 'true',
       status: req.query.status,
       search: req.query.search,
-      sortBy: req.query.sortBy
+      sortBy: req.query.sortBy  
     };
 
     // If guest, only show kids content
@@ -59,6 +59,7 @@ exports.createMedia = async (req, res) => {
     rating, 
     review,
     duration,
+    pageCount,
     genres,
     releaseDate 
   } = req.body;
@@ -104,7 +105,7 @@ exports.createMedia = async (req, res) => {
       return baseResponse(res, false, 400, "Valid age category is required (all, kids, teen, adult)");
     }
 
-    // Create media data object with all fields
+    // Create base media data
     const mediaData = {
       title: title.trim(),
       type,
@@ -112,11 +113,19 @@ exports.createMedia = async (req, res) => {
       ageCategory,
       rating: rating || null,
       review: review || null,
-      duration: duration ? Number(duration) : null,
       genres: genres || null,
       releaseDate: releaseDate ? new Date(releaseDate) : null,
       imageUrl: `/uploads/${req.file.filename}`
     };
+
+    // Add type-specific fields
+    if (type === 'movie') {
+      mediaData.duration = duration ? Number(duration) : null;
+      mediaData.pageCount = null;
+    } else if (type === 'book') {
+      mediaData.pageCount = pageCount ? Number(pageCount) : null;
+      mediaData.duration = null;
+    }
 
     const media = await mediaRepository.createMedia(mediaData);
     return baseResponse(res, true, 201, "Media created successfully", media);
@@ -251,12 +260,20 @@ exports.purchaseTicket = async (req, res) => {
 
 exports.addVenue = async (req, res) => {
   const mediaId = req.params.id;
-  const { name, type, location, price, capacity, availableSeats } = req.body;
+  const { 
+    name, 
+    type, 
+    location, 
+    price, 
+    capacity, 
+    availableSeats,
+    bookStock 
+  } = req.body;
   
   try {
-    // Validate required fields
-    if (!name || !type || !location || !price || !capacity) {
-      return baseResponse(res, false, 400, "Name, type, location, price, and capacity are required");
+    // Basic validation
+    if (!name || !type || !location || !price) {
+      return baseResponse(res, false, 400, "Name, type, location, and price are required");
     }
 
     // Validate venue type
@@ -264,24 +281,38 @@ exports.addVenue = async (req, res) => {
       return baseResponse(res, false, 400, "Type must be either 'cinema' or 'bookstore'");
     }
 
-    // Explicit type conversion for numeric fields
+    // Type-specific validation
+    if (type === 'cinema' && (!capacity || capacity < 1)) {
+      return baseResponse(res, false, 400, "Capacity is required for cinema venues and must be positive");
+    }
+
+    if (type === 'bookstore' && (!bookStock || bookStock < 0)) {
+      return baseResponse(res, false, 400, "Book stock is required for bookstore venues and cannot be negative");
+    }
+
+    // Create venue data based on type
     const venueData = {
       name: name.trim(),
       type: type.trim(),
       location: location.trim(),
       price: Number(price),
-      capacity: Number(capacity),
-      availableSeats: Number(availableSeats || capacity),
       isAvailable: true
     };
+
+    // Add type-specific fields
+    if (type === 'cinema') {
+      venueData.capacity = Number(capacity);
+      venueData.availableSeats = Number(availableSeats || capacity);
+      venueData.bookStock = null;
+    } else {
+      venueData.bookStock = Number(bookStock);
+      venueData.capacity = null;
+      venueData.availableSeats = null;
+    }
     
     // Validate numeric values
     if (isNaN(venueData.price) || venueData.price <= 0) {
       return baseResponse(res, false, 400, "Price must be a positive number");
-    }
-    
-    if (isNaN(venueData.capacity) || venueData.capacity <= 0) {
-      return baseResponse(res, false, 400, "Capacity must be a positive number");
     }
 
     const venue = await mediaRepository.createVenue(venueData);
@@ -302,5 +333,26 @@ exports.getMediaByAgeCategory = async (req, res) => {
   } catch (error) {
     console.error("Error retrieving media by age category:", error);
     return baseResponse(res, false, 500, "Error retrieving media", error.message);
+  }
+};
+
+exports.getBillboardByWeekAndYear = async (req, res) => {
+  try {
+    const { week, year } = req.query;
+    
+    if (!week || !year) {
+      return baseResponse(res, false, 400, "Week and year are required");
+    }
+
+    const billboard = await mediaRepository.getBillboardByWeekAndYear(week, year);
+    
+    if (billboard.length === 0) {
+      return baseResponse(res, true, 200, "No billboard data found for the specified week and year", []);
+    }
+
+    return baseResponse(res, true, 200, "Billboard retrieved successfully", billboard);
+  } catch (error) {
+    console.error("Error retrieving billboard:", error);
+    return baseResponse(res, false, 500, "Error retrieving billboard", error.message);
   }
 };

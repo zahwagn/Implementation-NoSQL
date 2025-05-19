@@ -63,7 +63,7 @@ const mediaSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Venue' 
   }],
-  viewCount: { 
+  totalTickets: { 
     type: Number, 
     default: 0,
     min: 0

@@ -30,7 +30,6 @@ const upload = multer({
 // Public routes (accessible to guests)
 router.get('/', async (req, res, next) => {
   try {
-    // Try to authenticate but continue if no token
     const authHeader = req.header('Authorization');
     if (authHeader) {
       authenticate(req, res, next);
@@ -41,9 +40,16 @@ router.get('/', async (req, res, next) => {
     next();
   }
 }, mediaController.getAllMedia);
-router.get('/:id', mediaController.getMediaById);
-router.get('/filter/:type', mediaController.filterMedia);
+
+// Billboard routes -  
 router.get('/billboard/current', mediaController.getCurrentBillboard);
+router.get('/billboard/search', mediaController.getBillboardByWeekAndYear);
+
+// Filter route
+router.get('/filter/:type', mediaController.filterMedia);
+
+// Get by ID route 
+router.get('/:id', mediaController.getMediaById);
 
 // Protected routes (require authentication)
 router.post('/', authenticate, upload.single('image'), mediaController.createMedia);
