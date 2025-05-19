@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  backend:
+    container_name: media-backend
+    build: 
+      context: ./server
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongodb:27017/mediadb
+      - JWT_SECRET=${JWT_SECRET}
+      - PORT=3000
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+      - ./uploads:/app/uploads
+    depends_on:
+      - mongodb
+    restart: unless-stopped
+    networks:
+      - media-network
+
+  mongodb:
+    container_name: media-mongodb
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    restart: unless-stopped
+    networks:
+      - media-network
+
+volumes:
+  mongodb_data:
+
+networks:
+  media-network:
+    driver: bridge
