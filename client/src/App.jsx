@@ -263,4 +263,6 @@ function App() {
   );
 }
 
+export { useAuth };
+
 export default App;
