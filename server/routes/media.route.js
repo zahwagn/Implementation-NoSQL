@@ -1,10 +1,18 @@
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const { authenticate, checkAgeRestriction } = require('../middlewares/auth');
 const mediaController = require('../controllers/media.controller');
 
+// Make sure uploads directory exists
+const uploadDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Define multer after ensuring the directory exists
+const multer = require('multer');
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, 'uploads/')

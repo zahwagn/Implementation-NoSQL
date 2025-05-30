@@ -22,6 +22,9 @@ app.use(
     })
 );
 
+// Serve static files from the 'uploads' directory
+app.use('/uploads', express.static('uploads'));
+
 // Routes
 app.use("/auth", authRoutes);
 app.use("/media", mediaRoutes);
