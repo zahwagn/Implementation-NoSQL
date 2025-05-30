@@ -49,8 +49,35 @@ router.get('/', async (req, res, next) => {
   }
 }, mediaController.getAllMedia);
 
-// Billboard routes -  
-router.get('/billboard/current', mediaController.getCurrentBillboard);
+// Billboard routes
+router.get('/billboard/current', mediaController.getCurrentBillboard); // Main billboard endpoint
+// Specialized billboard routes with fallback to main endpoint
+router.get('/billboard/movies', async (req, res) => {
+  try {
+    // Ensure mediaType is set to 'movie'
+    req.query.mediaType = 'movie';
+    return mediaController.getMovieBillboard(req, res);
+  } catch (error) {
+    console.error("Error in movie billboard route:", error);
+    // Fallback to the main billboard with type filter
+    req.query.mediaType = 'movie';
+    return mediaController.getCurrentBillboard(req, res);
+  }
+});
+
+router.get('/billboard/books', async (req, res) => {
+  try {
+    // Ensure mediaType is set to 'book'
+    req.query.mediaType = 'book';
+    return mediaController.getBookBillboard(req, res);
+  } catch (error) {
+    console.error("Error in book billboard route:", error);
+    // Fallback to the main billboard with type filter
+    req.query.mediaType = 'book';
+    return mediaController.getCurrentBillboard(req, res);
+  }
+});
+
 router.get('/billboard/search', mediaController.getBillboardByWeekAndYear);
 
 // Filter route

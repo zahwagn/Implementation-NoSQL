@@ -214,11 +214,19 @@ exports.getCurrentBillboard = async (filters = {}) => {
   const week = Math.ceil((currentDate.getDate() + currentDate.getDay()) / 7);
   const year = currentDate.getFullYear();
   
-  // Find billboards for current week and year
-  const billboards = await Billboard.find({ 
+  // Build the query based on filters
+  const query = { 
     week: week,
     year: year
-  })
+  };
+  
+  // Add mediaType filter if provided
+  if (filters.mediaType && ['movie', 'book'].includes(filters.mediaType)) {
+    query.mediaType = filters.mediaType;
+  }
+  
+  // Find billboards for current week and year
+  const billboards = await Billboard.find(query)
   .populate({
     path: 'media',
     populate: {
@@ -231,18 +239,23 @@ exports.getCurrentBillboard = async (filters = {}) => {
 
   // If no billboards exist for current week
   if (billboards.length === 0) {
-    const topMedia = await Media.find()
+    // Build media query
+    const mediaQuery = {};
+    if (filters.mediaType) {
+      mediaQuery.type = filters.mediaType;
+    }
+    
+    const topMedia = await Media.find(mediaQuery)
       .sort({ totalTickets: -1 })
       .limit(5)
       .populate({
         path: 'venues',
         match: { isAvailable: true }
-      });
-
-    // Create billboard entries for each media
+      });    // Create billboard entries for each media
     const billboardPromises = topMedia.map(async (media, index) => {
       const billboard = await Billboard.create({
         media: media._id,
+        mediaType: media.type, // Add the mediaType
         totalTickets: media.totalTickets,
         week: week,
         year: year,

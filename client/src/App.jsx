@@ -1603,27 +1603,52 @@ const EditMedia = () => {
 };
 
 const Billboard = () => {
-  const [billboard, setBillboard] = useState([]);
+  const [movieBillboard, setMovieBillboard] = useState([]);
+  const [bookBillboard, setBookBillboard] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState('movies');
   const [searchParams, setSearchParams] = useState({
     week: '',
     year: ''
   });
 
   useEffect(() => {
-    const fetchCurrentBillboard = async () => {
+    const fetchBillboards = async () => {
       try {
-        const response = await axios.get('/media/billboard/current');
-        setBillboard(response.data.payload);
-        setLoading(false);
+        // First try the specific endpoints
+        try {
+          const [moviesResponse, booksResponse] = await Promise.all([
+            axios.get('/media/billboard/movies'),
+            axios.get('/media/billboard/books')
+          ]);
+          
+          setMovieBillboard(moviesResponse.data.payload);
+          setBookBillboard(booksResponse.data.payload);
+          setLoading(false);
+        } catch (specificError) {
+          console.error("Failed with specific endpoints, trying fallback to general billboard:", specificError);
+          
+          // Fallback to the main billboard endpoint if specific ones fail
+          const response = await axios.get('/media/billboard/current');
+          const allBillboards = response.data.payload;
+          
+          // Separate movies and books
+          const movies = allBillboards.filter(item => item.media.type === 'movie');
+          const books = allBillboards.filter(item => item.media.type === 'book');
+          
+          setMovieBillboard(movies);
+          setBookBillboard(books);
+          setLoading(false);
+        }
       } catch (error) {
-        setError(error.response?.data.message || 'Failed to fetch billboard');
+        console.error("All billboard fetch attempts failed:", error);
+        setError(error.response?.data?.message || 'Failed to fetch billboard');
         setLoading(false);
       }
     };
 
-    fetchCurrentBillboard();
+    fetchBillboards();
   }, []);
 
   const handleSearchChange = (e) => {
@@ -1637,15 +1662,29 @@ const Billboard = () => {
   const handleSearchSubmit = async (e) => {
     e.preventDefault();
     try {
+      const mediaType = activeTab === 'movies' ? 'movie' : 'book';
+      
+      setLoading(true);
       const response = await axios.get('/media/billboard/search', {
         params: {
           week: searchParams.week,
-          year: searchParams.year
+          year: searchParams.year,
+          mediaType: mediaType
         }
       });
-      setBillboard(response.data.payload);
+      
+      const results = response.data.payload;
+      
+      if (activeTab === 'movies') {
+        setMovieBillboard(results.filter(item => item.media.type === 'movie'));
+      } else {
+        setBookBillboard(results.filter(item => item.media.type === 'book'));
+      }
+      setLoading(false);
     } catch (error) {
-      setError(error.response?.data.message || 'Failed to search billboard');
+      console.error("Search failed:", error);
+      setError(error.response?.data?.message || 'Failed to search billboard');
+      setLoading(false);
     }
   };
 
@@ -1684,49 +1723,132 @@ const Billboard = () => {
         </form>
       </div>
 
-      {billboard.length === 0 ? (
-        <div className="text-center text-gray-500">No billboard data available</div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {billboard.map((item, index) => (
-            <div key={item.media._id} className="bg-white rounded-lg shadow-md overflow-hidden">
-              <div className="relative">
-                {item.media.imageUrl && (
-                  <img
-                    src={`http://localhost:3000${item.media.imageUrl}`}
-                    alt={item.media.title}
-                    className="w-full h-48 object-cover"
-                  />
-                )}
-                <div className="absolute top-2 left-2 bg-yellow-500 text-white font-bold px-3 py-1 rounded-full">
-                  #{item.rank}
-                </div>
-              </div>
-              <div className="p-4">
-                <h3 className="text-xl font-semibold mb-2">{item.media.title}</h3>
-                <div className="flex justify-between mb-2">
-                  <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
-                    {item.media.type}
-                  </span>
-                  <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">
-                    {item.totalTickets} tickets
-                  </span>
-                </div>
-                <div className="flex justify-between items-center mt-4">
-                  <span className="font-semibold">
-                    ${item.totalRevenue?.toFixed(2) || '0.00'}
-                  </span>
-                  <Link
-                    to={`/media/${item.media._id}`}
-                    className="text-blue-600 hover:underline"
-                  >
-                    View Details
-                  </Link>
-                </div>
-              </div>
-            </div>
-          ))}
+      {/* Tabs */}
+      <div className="mb-6">
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex">
+            <button
+              onClick={() => setActiveTab('movies')}
+              className={`py-2 px-4 text-center border-b-2 font-medium text-sm ${
+                activeTab === 'movies'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Movies
+            </button>
+            <button
+              onClick={() => setActiveTab('books')}
+              className={`ml-8 py-2 px-4 text-center border-b-2 font-medium text-sm ${
+                activeTab === 'books'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Books
+            </button>
+          </nav>
         </div>
+      </div>
+
+      {/* Movies Tab */}
+      {activeTab === 'movies' && (
+        <>
+          {movieBillboard.length === 0 ? (
+            <div className="text-center text-gray-500">No movie billboard data available</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {movieBillboard.map((item) => (
+                <div key={item.media._id} className="bg-white rounded-lg shadow-md overflow-hidden">
+                  <div className="relative">
+                    {item.media.imageUrl && (
+                      <img
+                        src={`http://localhost:3000${item.media.imageUrl}`}
+                        alt={item.media.title}
+                        className="w-full h-48 object-cover"
+                      />
+                    )}
+                    <div className="absolute top-2 left-2 bg-yellow-500 text-white font-bold px-3 py-1 rounded-full">
+                      #{item.rank}
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <h3 className="text-xl font-semibold mb-2">{item.media.title}</h3>
+                    <div className="flex justify-between mb-2">
+                      <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                        Movie
+                      </span>
+                      <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">
+                        {item.totalTickets} tickets
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center mt-4">
+                      <span className="font-semibold">
+                        ${item.totalRevenue?.toFixed(2) || '0.00'}
+                      </span>
+                      <Link
+                        to={`/media/${item.media._id}`}
+                        className="text-blue-600 hover:underline"
+                      >
+                        View Details
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Books Tab */}
+      {activeTab === 'books' && (
+        <>
+          {bookBillboard.length === 0 ? (
+            <div className="text-center text-gray-500">No book billboard data available</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {bookBillboard.map((item) => (
+                <div key={item.media._id} className="bg-white rounded-lg shadow-md overflow-hidden">
+                  <div className="relative">
+                    {item.media.imageUrl && (
+                      <img
+                        src={`http://localhost:3000${item.media.imageUrl}`}
+                        alt={item.media.title}
+                        className="w-full h-48 object-cover"
+                      />
+                    )}
+                    <div className="absolute top-2 left-2 bg-yellow-500 text-white font-bold px-3 py-1 rounded-full">
+                      #{item.rank}
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <h3 className="text-xl font-semibold mb-2">{item.media.title}</h3>
+                    <div className="flex justify-between mb-2">
+                      <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                        Book
+                      </span>
+                      <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded">
+                        Popularity: {item.popularity}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center mt-4">
+                      <span className="font-semibold">
+                        Week {item.week}, {item.year}
+                      </span>
+                      <Link
+                        to={`/media/${item.media._id}`}
+                        className="text-blue-600 hover:underline"
+                      >
+                        View Details
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -221,7 +221,8 @@ exports.filterMedia = async (req, res) => {
 exports.getCurrentBillboard = async (req, res) => {
   try {
     const filters = {
-      ageCategory: req.query.ageCategory
+      ageCategory: req.query.ageCategory,
+      mediaType: req.query.mediaType  // Get mediaType from query
     };
     
     const billboard = await mediaRepository.getCurrentBillboard(filters);
@@ -229,6 +230,61 @@ exports.getCurrentBillboard = async (req, res) => {
   } catch (error) {
     console.error("Error retrieving billboard:", error);
     return baseResponse(res, false, 500, "Error retrieving billboard", error.message);
+  }
+};
+
+// Specific controller for movie billboards
+exports.getMovieBillboard = async (req, res) => {
+  try {
+    const filters = {
+      ageCategory: req.query.ageCategory,
+      mediaType: 'movie'  // Specifically for movies
+    };
+    
+    const billboard = await mediaRepository.getCurrentBillboard(filters);
+    
+    // Format response to include relevant movie data only
+    const formattedBillboard = billboard.map(item => ({
+      media: item.media,
+      rank: item.rank,
+      totalTickets: item.totalTickets,
+      totalRevenue: item.totalTickets * (item.media.venues[0]?.price || 0),
+      week: item.week,
+      year: item.year,
+      lastUpdated: item.lastUpdated
+    }));
+    
+    return baseResponse(res, true, 200, "Movie billboard retrieved successfully", formattedBillboard);
+  } catch (error) {
+    console.error("Error retrieving movie billboard:", error);
+    return baseResponse(res, false, 500, "Error retrieving movie billboard", error.message);
+  }
+};
+
+// Specific controller for book billboards
+exports.getBookBillboard = async (req, res) => {
+  try {
+    const filters = {
+      ageCategory: req.query.ageCategory,
+      mediaType: 'book'  // Specifically for books
+    };
+    
+    const billboard = await mediaRepository.getCurrentBillboard(filters);
+    
+    // Format response for books without ticket-related data
+    const formattedBillboard = billboard.map(item => ({
+      media: item.media,
+      rank: item.rank,
+      popularity: item.totalTickets, // Rename to popularity instead of tickets for books
+      week: item.week,
+      year: item.year,
+      lastUpdated: item.lastUpdated
+    }));
+    
+    return baseResponse(res, true, 200, "Book billboard retrieved successfully", formattedBillboard);
+  } catch (error) {
+    console.error("Error retrieving book billboard:", error);
+    return baseResponse(res, false, 500, "Error retrieving book billboard", error.message);
   }
 };
 
@@ -338,18 +394,50 @@ exports.getMediaByAgeCategory = async (req, res) => {
 
 exports.getBillboardByWeekAndYear = async (req, res) => {
   try {
-    const { week, year } = req.query;
+    const { week, year, mediaType } = req.query;
     
     if (!week || !year) {
       return baseResponse(res, false, 400, "Week and year are required");
     }
 
-    const billboard = await mediaRepository.getBillboardByWeekAndYear(week, year);
+    let billboard = await mediaRepository.getBillboardByWeekAndYear(week, year);
+    
+    // Filter by mediaType if specified
+    if (mediaType) {
+      billboard = billboard.filter(item => item.mediaType === mediaType);
+    }
     
     if (billboard.length === 0) {
-      return baseResponse(res, true, 200, "No billboard data found for the specified week and year", []);
+      return baseResponse(res, true, 200, "No billboard data found for the specified criteria", []);
     }
 
+    // Format based on media type
+    if (mediaType === 'book') {
+      // Format response for books
+      const formattedBillboard = billboard.map(item => ({
+        media: item.media,
+        rank: item.rank,
+        popularity: item.totalTickets, // Rename to popularity for books
+        week: item.week,
+        year: item.year,
+        lastUpdated: item.lastUpdated
+      }));
+      return baseResponse(res, true, 200, "Book billboard retrieved successfully", formattedBillboard);
+    } else if (mediaType === 'movie') {
+      // Format response for movies
+      const formattedBillboard = billboard.map(item => ({
+        media: item.media,
+        rank: item.rank,
+        totalTickets: item.totalTickets,
+        totalRevenue: item.totalTickets * (item.media.venues[0]?.price || 0),
+        week: item.week,
+        year: item.year,
+        lastUpdated: item.lastUpdated
+      }));
+      return baseResponse(res, true, 200, "Movie billboard retrieved successfully", formattedBillboard);
+    }
+
+    // Default response if no mediaType filter
     return baseResponse(res, true, 200, "Billboard retrieved successfully", billboard);
   } catch (error) {
     console.error("Error retrieving billboard:", error);
