@@ -64,6 +64,8 @@ const App = () => {
             <Route path="/register" element={<Register />} />
             <Route path="/login" element={<Login />} />
             <Route path="/media" element={<MediaList />} />
+            <Route path="/movies" element={<MediaList type="movie" />} />
+            <Route path="/books" element={<MediaList type="book" />} />
             
             {/* Protected Routes */}
             <Route path="/media/create" element={
@@ -123,13 +125,13 @@ const Navbar = () => {
             <>
               {/* These links match the media type enum in the schema */}
               <Link 
-                to="/media?type=movie" 
+                to="/movies" 
                 className="hover:underline"
               >
                 Movies
               </Link>
               <Link 
-                to="/media?type=book" 
+                to="/books" 
                 className="hover:underline"
               >
                 Books
@@ -500,18 +502,46 @@ const Login = () => {
   );
 };
 
-const MediaList = () => {
+const MediaList = ({ type }) => {
   const [user, setUser] = useState(null);
   const [media, setMedia] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filters, setFilters] = useState({
+    type: type, // Add type to filters
     minRating: '',
     availableAtVenue: false,
     status: '',
     search: '',
     sortBy: ''
   });
+
+  useEffect(() => {
+    const fetchMedia = async () => {
+      try {
+        // Use the filter endpoint instead of the general media endpoint
+        const response = await axios.get(`/media/filter/${type}`, { 
+          params: {
+            minRating: filters.minRating,
+            availableAtVenue: filters.availableAtVenue,
+            status: filters.status,
+            search: filters.search,
+            sortBy: filters.sortBy
+          }
+        });
+        setMedia(response.data.payload);
+        setLoading(false);
+      } catch (error) {
+        setError(error.response?.data.message || 'Failed to fetch media');
+        setLoading(false);
+      }
+    };
+
+    // Only fetch if type is specified
+    if (type) {
+      fetchMedia();
+    }
+  }, [filters, type]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -524,21 +554,6 @@ const MediaList = () => {
       }
     }
   }, []);
-
-  useEffect(() => {
-    const fetchMedia = async () => {
-      try {
-        const response = await axios.get('/media', { params: filters });
-        setMedia(response.data.payload);
-        setLoading(false);
-      } catch (error) {
-        setError(error.response?.data.message || 'Failed to fetch media');
-        setLoading(false);
-      }
-    };
-
-    fetchMedia();
-  }, [filters]);
 
   const handleFilterChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -554,17 +569,20 @@ const MediaList = () => {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Media Library</h2>
-        {user && ( // Only show if user is logged in
+        <h2 className="text-2xl font-bold">
+          {type === 'movie' ? 'Movies' : 'Books'} Library
+        </h2>
+        {user && (
           <Link 
-            to="/media/create" 
+            to={`/media/create?type=${type}`}
             className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
           >
-            Add New Media
+            Add New {type === 'movie' ? 'Movie' : 'Book'}
           </Link>
         )}
       </div>
 
+      {/* Filters section */}
       <div className="bg-white p-4 rounded-lg shadow-md mb-6">
         <h3 className="text-lg font-semibold mb-3">Filters</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -576,6 +594,7 @@ const MediaList = () => {
               value={filters.search}
               onChange={handleFilterChange}
               className="w-full px-3 py-2 border rounded"
+              placeholder={`Search ${type === 'movie' ? 'movies' : 'books'}...`}
             />
           </div>
           <div>
@@ -603,9 +622,12 @@ const MediaList = () => {
               className="w-full px-3 py-2 border rounded"
             >
               <option value="">All</option>
-              <option value="plan">Plan to Watch/Read</option>
-              <option value="watched">Watched</option>
-              <option value="read">Read</option>
+              <option value="plan">
+                Plan to {type === 'movie' ? 'Watch' : 'Read'}
+              </option>
+              <option value={type === 'movie' ? 'watched' : 'read'}>
+                {type === 'movie' ? 'Watched' : 'Read'}
+              </option>
               <option value="completed">Completed</option>
             </select>
           </div>
@@ -649,32 +671,33 @@ const MediaList = () => {
             )}
             <div className="p-4">
               <h3 className="text-xl font-semibold mb-2">{item.title}</h3>
+              {/* Show duration for movies, page count for books */}
+              {type === 'movie' ? (
+                <p className="text-sm text-gray-600 mb-2">
+                  {item.duration} minutes
+                </p>
+              ) : (
+                <p className="text-sm text-gray-600 mb-2">
+                  {item.pageCount} pages
+                </p>
+              )}
               <div className="flex justify-between mb-2">
                 <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
-                  {item.type}
+                  {type === 'movie' ? 'Movie' : 'Book'}
                 </span>
-                <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">
-                  {item.ageCategory}
-                </span>
-              </div>
-              <p className="text-gray-600 mb-2">Status: {item.status}</p>
-              {item.rating && (
-                <div className="flex items-center mb-2">
-                  <span className="text-yellow-500 mr-1">★</span>
-                  <span>{item.rating}/5</span>
-                </div>
-              )}
-              <div className="flex justify-between mt-4">
-                <Link 
-                  to={`/media/${item._id}`} 
-                  className="text-blue-600 hover:underline"
-                >
-                  View Details
-                </Link>
-                {item.venues && item.venues.length > 0 && (
-                  <span className="text-green-600">Available at {item.venues.length} venue(s)</span>
+                {item.rating && (
+                  <div className="flex items-center">
+                    <span className="text-yellow-500 mr-1">★</span>
+                    <span>{item.rating}/5</span>
+                  </div>
                 )}
               </div>
+              <Link 
+                to={`/media/${item._id}`} 
+                className="text-blue-600 hover:underline"
+              >
+                View Details
+              </Link>
             </div>
           </div>
         ))}
