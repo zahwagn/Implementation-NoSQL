@@ -1634,39 +1634,87 @@ const Billboard = () => {
   const [searchParams, setSearchParams] = useState({
     week: '',
     year: ''
-  });
-
-  useEffect(() => {
+  });  useEffect(() => {
     const fetchBillboards = async () => {
       try {
-        // First try the specific endpoints
-        try {
-          const [moviesResponse, booksResponse] = await Promise.all([
-            axios.get('/media/billboard/movies'),
-            axios.get('/media/billboard/books')
+        setLoading(true);
+        setError('');
+        
+        // First try the specific endpoints with a timeout to prevent hanging
+        const fetchWithTimeout = (url, options = {}) => {
+          const timeout = options.timeout || 8000; // Increased timeout to 8 seconds
+          return Promise.race([
+            axios.get(url),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error(`Request to ${url} timed out`)), timeout)
+            )
           ]);
+        };
+
+        try {
+          // Use individual try/catch for each request to prevent one failure from affecting the other
+          let moviesData = [];
+          let booksData = [];
           
-          setMovieBillboard(moviesResponse.data.payload);
-          setBookBillboard(booksResponse.data.payload);
+          try {
+            const moviesResponse = await fetchWithTimeout('/media/billboard/movies');
+            if (moviesResponse.data && moviesResponse.data.payload) {
+              moviesData = moviesResponse.data.payload;
+            }
+          } catch (movieError) {
+            console.error("Failed to fetch movie billboard:", movieError);
+          }
+          
+          try {
+            const booksResponse = await fetchWithTimeout('/media/billboard/books');
+            if (booksResponse.data && booksResponse.data.payload) {
+              booksData = booksResponse.data.payload;
+            }
+          } catch (bookError) {
+            console.error("Failed to fetch book billboard:", bookError);
+          }
+          
+          // Update state with whatever data we got
+          if (moviesData.length > 0) {
+            setMovieBillboard(moviesData);
+          }
+          
+          if (booksData.length > 0) {
+            setBookBillboard(booksData);
+          }
+          
+          // If both requests failed, try the fallback
+          if (moviesData.length === 0 && booksData.length === 0) {
+            throw new Error("Both movie and book billboard requests failed");
+          }
+          
           setLoading(false);
         } catch (specificError) {
           console.error("Failed with specific endpoints, trying fallback to general billboard:", specificError);
           
           // Fallback to the main billboard endpoint if specific ones fail
-          const response = await axios.get('/media/billboard/current');
-          const allBillboards = response.data.payload;
-          
-          // Separate movies and books
-          const movies = allBillboards.filter(item => item.media.type === 'movie');
-          const books = allBillboards.filter(item => item.media.type === 'book');
-          
-          setMovieBillboard(movies);
-          setBookBillboard(books);
-          setLoading(false);
+          try {
+            const response = await fetchWithTimeout('/media/billboard/current');
+            if (response.data && response.data.payload) {
+              const allBillboards = response.data.payload;
+              
+              // Separate movies and books
+              const movies = allBillboards.filter(item => item.media && item.media.type === 'movie');
+              const books = allBillboards.filter(item => item.media && item.media.type === 'book');
+              
+              setMovieBillboard(movies);
+              setBookBillboard(books);
+            }
+          } catch (fallbackError) {
+            console.error("Fallback request also failed:", fallbackError);
+            setError("Failed to load billboard data. Please refresh the page and try again.");
+          } finally {
+            setLoading(false);
+          }
         }
       } catch (error) {
         console.error("All billboard fetch attempts failed:", error);
-        setError(error.response?.data?.message || 'Failed to fetch billboard');
+        setError(error.response?.data?.message || 'Failed to fetch billboard data. Please try again.');
         setLoading(false);
       }
     };

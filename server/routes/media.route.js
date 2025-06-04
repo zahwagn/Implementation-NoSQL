@@ -32,7 +32,7 @@ const upload = multer({
       cb(new Error('Not an image! Please upload only images.'), false);
     }
   },
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB
+  limits: { fileSize: 10 * 1024 * 1024 } // Increased to 10MB
 });
 
 // Public routes (accessible to guests)
