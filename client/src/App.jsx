@@ -506,8 +506,7 @@ const MediaList = ({ type }) => {
   const [user, setUser] = useState(null);
   const [media, setMedia] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [filters, setFilters] = useState({
+  const [error, setError] = useState('');  const [filters, setFilters] = useState({
     type: type, // Add type to filters
     minRating: '',
     availableAtVenue: false,
@@ -515,24 +514,34 @@ const MediaList = ({ type }) => {
     search: '',
     sortBy: ''
   });
+  const [refreshKey, setRefreshKey] = useState(0); // Add refresh key state
+  
+  // Function to force a refresh
+  const forceRefresh = () => {
+    setRefreshKey(prevKey => prevKey + 1);
+  };
 
   useEffect(() => {
     const fetchMedia = async () => {
       try {
+        setLoading(true);
         // Use the filter endpoint instead of the general media endpoint
+        // Add a timestamp parameter to prevent caching
         const response = await axios.get(`/media/filter/${type}`, { 
           params: {
             minRating: filters.minRating,
             availableAtVenue: filters.availableAtVenue,
             status: filters.status,
             search: filters.search,
-            sortBy: filters.sortBy
+            sortBy: filters.sortBy,
+            _t: new Date().getTime() // Add timestamp to prevent caching
           }
         });
         setMedia(response.data.payload);
         setLoading(false);
       } catch (error) {
-        setError(error.response?.data.message || 'Failed to fetch media');
+        console.error("Error fetching media:", error);
+        setError(error.response?.data?.message || 'Failed to fetch media');
         setLoading(false);
       }
     };
@@ -541,7 +550,7 @@ const MediaList = ({ type }) => {
     if (type) {
       fetchMedia();
     }
-  }, [filters, type]);
+  }, [filters, type, refreshKey]); // Add refreshKey as dependency
 
   useEffect(() => {
     const token = localStorage.getItem('token');

@@ -126,22 +126,12 @@ exports.createMedia = async (req, res) => {
     } else if (type === 'book') {
       mediaData.pageCount = pageCount ? Number(pageCount) : null;
       mediaData.duration = null;
-    }    // Create the media and add to billboard in one operation
+    }
+    
+    // Create the media (mediaRepository.createMedia now handles adding to billboard)
     const media = await mediaRepository.createMedia(mediaData);
     
-    // Add to billboard automatically
-    try {
-      // Get current date info for billboard entry
-      const currentDate = new Date();
-      const week = Math.ceil((currentDate.getDate() + currentDate.getDay()) / 7);
-      const year = currentDate.getFullYear();
-      
-      // Call the addToBillboard function
-      await mediaRepository.addToBillboard(media._id, media.type, 0, week, year);
-    } catch (billboardError) {
-      console.error("Failed to add media to billboard:", billboardError);
-      // Still return success for creating the media
-    }
+    // No need to call addToBillboard separately as it's handled in createMedia
     
     return baseResponse(res, true, 201, "Media created successfully", media);
   } catch (error) {
@@ -290,18 +280,23 @@ exports.getMovieBillboard = async (req, res) => {
       mediaType: 'movie'  // Specifically for movies
     };
     
+    console.log("Fetching movie billboard with filters:", filters);
+    
     const billboard = await mediaRepository.getCurrentBillboard(filters);
     
+    console.log(`Found ${billboard.length} movie billboard items`);
+    
     // Format response to include relevant movie data only
-    const formattedBillboard = billboard.map(item => ({
-      media: item.media,
-      rank: item.rank,
-      totalTickets: item.totalTickets,
-      totalRevenue: item.totalTickets * (item.media.venues[0]?.price || 0),
-      week: item.week,
-      year: item.year,
-      lastUpdated: item.lastUpdated
-    }));
+    const formattedBillboard = billboard.filter(item => item.media && item.media.type === 'movie')
+      .map(item => ({
+        media: item.media,
+        rank: item.rank,
+        totalTickets: item.totalTickets,
+        totalRevenue: item.totalTickets * (item.media.venues && item.media.venues[0]?.price || 0),
+        week: item.week,
+        year: item.year,
+        lastUpdated: item.lastUpdated
+      }));
     
     return baseResponse(res, true, 200, "Movie billboard retrieved successfully", formattedBillboard);
   } catch (error) {
@@ -318,17 +313,23 @@ exports.getBookBillboard = async (req, res) => {
       mediaType: 'book'  // Specifically for books
     };
     
+    console.log("Fetching book billboard with filters:", filters);
+    
     const billboard = await mediaRepository.getCurrentBillboard(filters);
     
+    console.log(`Found ${billboard.length} book billboard items`);
+    
     // Format response for books without ticket-related data
-    const formattedBillboard = billboard.map(item => ({
-      media: item.media,
-      rank: item.rank,
-      popularity: item.totalTickets, // Rename to popularity instead of tickets for books
-      week: item.week,
-      year: item.year,
-      lastUpdated: item.lastUpdated
-    }));
+    // Filter to ensure we only get books
+    const formattedBillboard = billboard.filter(item => item.media && item.media.type === 'book')
+      .map(item => ({
+        media: item.media,
+        rank: item.rank,
+        popularity: item.totalTickets, // Rename to popularity instead of tickets for books
+        week: item.week,
+        year: item.year,
+        lastUpdated: item.lastUpdated
+      }));
     
     return baseResponse(res, true, 200, "Book billboard retrieved successfully", formattedBillboard);
   } catch (error) {
