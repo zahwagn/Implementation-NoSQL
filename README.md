@@ -134,6 +134,42 @@ server/
 
 Aplikasi ini dapat diakses, pada`http://localhost:3000` untuk *frontend* dengan *backend* berjalan pada *port* yang ditentukan dalam file `.env` (misalnya, 5000 atau 3000).
 
+## 💻 Frontend <span style="color: darkblue;">Preview</span>
+
+### **GUEST View**
+* Hanya dapat melihat media yang ada atau GET Media
+![image](https://hackmd.io/_uploads/H1Xkk7CGll.png)
+---
+### **Register and Login View**
+* Dapat melakukan daftar akun dengan mengisi Name, Username, Age, Email, dan Password.
+![image](https://hackmd.io/_uploads/BJtTAG0fee.png)
+
+* Setelah mendaftar akun dapat masuk atau login ke dalam website dengan memasukkan Email dan Password yang telah didaftarkan pada Register.
+![image](https://hackmd.io/_uploads/ByQBJQAGgl.png)
+---
+### **USER View**
+**Movies Section**
+* Dapat melihat **Movies Library** (Daftar film yang ada) atau GET Media. 
+* Dapat melakukan "**Filters**" untuk mencari Movies yang ada pada Library sesuai dengan Rating, Status, Sort by (Newest, Highest Rating, Most Tickets). Serta Available at Venue.
+![image](https://hackmd.io/_uploads/SkIUMQRMxx.png)
+* Serta dapat **menambahkan Movies** yang diinginkan atau POST Media.
+![image](https://hackmd.io/_uploads/ByFU470zlx.png)
+* Dapat **melakukan edit** atau perubahan pada section Movies atau PUT Media.
+* Dapat **menghapus media** Movies atau DELETE Media.
+![image](https://hackmd.io/_uploads/rJwPN7AGex.png)
+---
+**Books Section**
+
+* Dapat melihat **Books Library** (Daftar buku yang ada) atau POST Media.
+* Dapat melakukan "**Filters**" untuk mencari Books yang ada pada Library sesuai dengan Rating, Status, Sort by (Newest, Highest Rating, Most Buys). Serta Available at Venue.
+![image](https://hackmd.io/_uploads/Sy8XH7Azle.png)
+* Dapat **menambahkan Books** yang diinginkan atau POST Media.
+![image](https://hackmd.io/_uploads/ryjP7QAGxe.png)
+* Dapat **menghapus media** Books atau DELETE Media.
+![image](https://hackmd.io/_uploads/H1jdX70zee.png)
+* Dapat **melakukan edit** atau perubahan pada detail Books dan Movies yang diinginkan atau PUT Media.
+![image](https://hackmd.io/_uploads/HkD9XXAGlg.png)
+
 ## 📊 Database Architecture
 
 ### Model Mongoose
