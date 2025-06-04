@@ -1,42 +1,58 @@
 version: '3.8'
 
 services:
+  mongodb:
+    image: mongo:6.0
+    container_name: nosql-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: nosql_media
+    volumes:
+      - mongodb_data:/data/db
+      - ./server/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - nosql-network
+
   backend:
-    container_name: media-backend
-    build: 
+    build:
       context: ./server
       dockerfile: Dockerfile
+    container_name: nosql-backend
+    restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
-      - NODE_ENV=production
-      - MONGODB_URI=mongodb://mongodb:27017/mediadb
-      - JWT_SECRET=${JWT_SECRET}
-      - PORT=3000
+      NODE_ENV: production
+      MONGODB_URI: mongodb://admin:password123@mongodb:27017/nosql_media?authSource=admin
+      JWT_SECRET: your-super-secret-jwt-key-here
+      PORT: 3000
     volumes:
-      - ./server:/app
-      - /app/node_modules
-      - ./uploads:/app/uploads
+      - ./server/uploads:/app/uploads
     depends_on:
       - mongodb
-    restart: unless-stopped
     networks:
-      - media-network
+      - nosql-network
 
-  mongodb:
-    container_name: media-mongodb
-    image: mongo:latest
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: nosql-frontend
     restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
     networks:
-      - media-network
+      - nosql-network
 
 volumes:
   mongodb_data:
 
 networks:
-  media-network:
+  nosql-network:
     driver: bridge
