@@ -55,35 +55,62 @@ Fungsionalitas untuk mengelola tiket yang terkait dengan media (misalnya, pemuta
 
 ## 📂 Project <span style="color: darkblue;">Structure</span>
 
-Memiliki struktur ***backend*** sebagai berikut:
+Memiliki struktur ***backend dan frontend*** sebagai berikut:
 
 ```
-server/
-├── config/
-│   └── db.js           # Pengaturan koneksi database (MongoDB)
-├── controllers/
-│   ├── auth.controller.js  # Menangani logika autentikasi
-│   └── media.controller.js # Menangani logika media & billboard
-├── middlewares/
-│   ├── auth.js         # Verifikasi JWT & pemeriksaan peran/usia
-│   └── upload.js       # Menangani unggahan file (misalnya, poster)
-├── models/
-│   ├── Billboard.js    # Skema untuk data billboard mingguan
-│   ├── Media.js        # Skema untuk item media (film, buku)
-│   ├── Ticket.js       # Skema untuk tiket
-│   ├── User.js         # Skema untuk akun pengguna
-│   └── Venue.js        # Skema untuk venue
-├── node_modules/       # Dependensi proyek
-├── repositories/
-│   └── media.repository.js # Logika akses data untuk media
-├── routes/
-│   ├── auth.route.js   # Endpoint autentikasi
-│   └── media.route.js  # Endpoint Media dan Billboard
-├── uploads/            # Direktori untuk file yang diunggah
-├── .env                # Konfigurasi variabel lingkungan
-├── Dockerfile          # Konfigurasi Docker untuk deployment
-└── index.js            # Titik masuk server utama
+project-root/
+├── client/              # Folder untuk frontend (React)
+│   ├── public/          # Folder untuk file statis seperti index.html
+│   │   └── index.html   # File HTML utama
+│   ├── src/             # Folder untuk file sumber aplikasi
+│   │   ├── assets/      # Folder untuk file aset seperti gambar atau font
+│   │   ├── components/  # Komponen-komponen React
+│   │   ├── pages/       # Halaman utama aplikasi
+│   │   ├── api.js       # Mengelola komunikasi dengan backend
+│   │   ├── App.css      # Gaya CSS untuk aplikasi utama
+│   │   ├── App.jsx      # Komponen utama React
+│   │   ├── index.css    # Gaya CSS untuk elemen global
+│   │   ├── main.jsx     # Titik masuk aplikasi React
+│   ├── .gitignore       # File untuk menentukan file dan folder yang diabaikan oleh git
+│   ├── eslint.config.js # Konfigurasi ESLint untuk linting kode
+│   ├── index.html       # File HTML utama untuk penghubung
+│   ├── package-lock.json# File yang mengunci versi dependensi
+│   ├── package.json     # File konfigurasi proyek dengan dependensi
+│   ├── postcss.config.js# Konfigurasi untuk PostCSS
+│   ├── README.md        # Dokumentasi proyek
+│   ├── tailwind.config.js# Konfigurasi untuk Tailwind CSS
+│   └── vite.config.js   # Konfigurasi untuk Vite (build tool)
+├── server/              # Folder untuk backend (Node.js)
+│   ├── config/          # Folder untuk konfigurasi aplikasi
+│   │   └── db.js        # Pengaturan koneksi database (MongoDB)
+│   ├── controllers/     # Logika untuk menangani request
+│   │   ├── auth.controller.js  # Menangani logika autentikasi
+│   │   └── media.controller.js # Menangani logika media & billboard
+│   ├── middlewares/     # Folder untuk middleware aplikasi
+│   │   ├── auth.js      # Verifikasi JWT & pemeriksaan peran/usia
+│   │   └── upload.js    # Menangani unggahan file (misalnya, poster)
+│   ├── models/          # Skema MongoDB untuk aplikasi
+│   │   ├── Billboard.js # Skema untuk data billboard mingguan
+│   │   ├── Media.js     # Skema untuk item media (film, buku)
+│   │   ├── Ticket.js    # Skema untuk tiket
+│   │   ├── User.js      # Skema untuk akun pengguna
+│   │   └── Venue.js     # Skema untuk venue
+│   ├── node_modules/    # Dependensi proyek
+│   ├── repositories/    # Folder untuk logika akses data
+│   │   └── media.repository.js # Logika akses data untuk media
+│   ├── routes/          # Endpoint API
+│   │   ├── auth.route.js   # Endpoint autentikasi
+│   │   └── media.route.js  # Endpoint Media dan Billboard
+│   ├── uploads/         # Direktori untuk file yang diunggah
+│   ├── .env             # Konfigurasi variabel lingkungan
+│   ├── Dockerfile       # Konfigurasi Docker untuk backend
+│   ├── package-lock.json # File yang mengunci versi dependensi
+│   ├── package.json     # File konfigurasi proyek dengan dependensi
+│   └── index.js         # Titik masuk server utama
+├── docker-compose.yml   # Konfigurasi Docker Compose untuk menjalankan container
+├── .gitignore           # Global gitignore untuk seluruh proyek
 ```
+
 *(Catatan: Menggunakan pengaturan MERN standar dengan direktori `client/` untuk frontend React)*
 
 ## 🛠️ Quick <span style="color: darkblue;">Start</span>
