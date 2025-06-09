@@ -297,31 +297,82 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"node -e 
 # Jalankan pada terminal dan kemudian copy untuk dimasukkan ke .env
 ```
 
-## 🐳  Docker Deployment 
-Menambahkan `Dockerfile` untuk mengkontainerisasi aplikasi *backend* sebagai berikut:
+## 🐳 Docker Deployment
+
+Menambahkan `Dockerfile` untuk mengkontainerisasi aplikasi *backend* dan *frontend* seperti berikut:
+
+### 1. Struktur
+```
+Implementation-NoSQL/
+├── docker-compose.yml           // Orchestration
+├── client/
+│   ├── Dockerfile              // Frontend container
+│   ├── nginx.conf              // Web server config
+│   └── src/App.jsx             // React app
+└── server/
+    ├── Dockerfile              // Backend container
+    ├── init-mongo.js           // Database init
+    └── [backend files]         // Node.js API
+```
+
+### 2. Client (Frontend)
 
 ```dockerfile
-# Gunakan runtime Node.js resmi
-FROM node:18-alpine
+# Build stage
+FROM node:18-alpine as build
 
-# Atur direktori
-WORKDIR /app/server
-COPY server/package*.json ./
+WORKDIR /app
 
-# Instal dependensi aplikasi
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
 RUN npm install
 
-# Bundel sumber aplikasi
-COPY server/ .
+# Copy source code
+COPY . .
 
-# Buat port tersedia untuk dunia luar kontainer ini
-EXPOSE 5000 # Atau port yang ditentukan di .env Anda
+# Build the app
+RUN npm run build
 
-# Tentukan variabel lingkungan
-ENV NODE_ENV=production
+# Production stage
+FROM nginx:alpine
 
-# Jalankan aplikasi saat kontainer diluncurkan
-CMD ["node", "index.js"]
+# Copy built app to nginx
+COPY --from=build /app/dist /usr/share/nginx/html
+
+# Copy nginx config
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Expose port
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
+```
+### 3. Server (Backend)
+
+```dockerfile
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy rest of the application
+COPY . .
+
+# Create uploads directory
+RUN mkdir -p uploads
+
+# Expose port
+EXPOSE 3000
+
+# Start the app
+CMD ["npm", "start"]
 ```
 
 ## 🤝 Contributing
