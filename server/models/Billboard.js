@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const billboardSchema = new mongoose.Schema({
   media: { type: mongoose.Schema.Types.ObjectId, ref: 'Media', required: true },
+  mediaType: { type: String, enum: ['movie', 'book'], required: true },
   totalTickets: { type: Number, required: true, default: 0 },
   week: { type: Number, required: true },
   year: { type: Number, required: true },
@@ -9,12 +10,13 @@ const billboardSchema = new mongoose.Schema({
   lastUpdated: { type: Date, default: Date.now }
 });
 
-// Auto-update rank based on totalTickets
+// Auto-update rank based on totalTickets within the same mediaType
 billboardSchema.pre('save', async function(next) {
   if (this.isModified('totalTickets')) {
     const currentWeekBillboards = await this.constructor.find({ 
       week: this.week, 
-      year: this.year 
+      year: this.year,
+      mediaType: this.mediaType // Rank within the same mediaType
     }).sort({ totalTickets: -1 });
     
     currentWeekBillboards.forEach(async (item, index) => {

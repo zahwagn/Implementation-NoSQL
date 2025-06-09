@@ -1,5 +1,6 @@
 const mediaRepository = require('../repositories/media.repository');
 const baseResponse = require('../utils/baseResponse');
+const Billboard = require('../models/Billboard');
 
 exports.getAllMedia = async (req, res) => {
   try {
@@ -126,8 +127,12 @@ exports.createMedia = async (req, res) => {
       mediaData.pageCount = pageCount ? Number(pageCount) : null;
       mediaData.duration = null;
     }
-
+    
+    // Create the media (mediaRepository.createMedia now handles adding to billboard)
     const media = await mediaRepository.createMedia(mediaData);
+    
+    // No need to call addToBillboard separately as it's handled in createMedia
+    
     return baseResponse(res, true, 201, "Media created successfully", media);
   } catch (error) {
     console.error("Error creating media:", error);
@@ -156,6 +161,13 @@ if ((status === 'watched' || status === 'read' || status === 'completed') && !ra
   }
   
   try {
+    // First get current media to check for type changes
+    const oldMedia = await mediaRepository.getMediaById(id);
+    if (!oldMedia) {
+      return baseResponse(res, false, 404, "Media not found", null);
+    }
+    
+    // Update the media
     const media = await mediaRepository.updateMedia(id, {
       title,
       type,
@@ -163,6 +175,33 @@ if ((status === 'watched' || status === 'read' || status === 'completed') && !ra
       rating,
       review
     }, image);
+    
+    // If media type changed, update billboard entries
+    if (type && type !== oldMedia.type) {
+      try {
+        const currentDate = new Date();
+        const week = Math.ceil((currentDate.getDate() + currentDate.getDay()) / 7);
+        const year = currentDate.getFullYear();
+        
+        // Update any existing billboard entries to reflect new media type
+        await Billboard.updateMany(
+          { media: id },
+          { $set: { mediaType: type } }
+        );
+        
+        // Ensure there's a billboard entry for current week
+        await mediaRepository.addToBillboard(
+          id, 
+          type, 
+          media.totalTickets || 0,
+          week,
+          year
+        );
+      } catch (billboardError) {
+        console.error("Failed to update billboard entries:", billboardError);
+        // Continue with response as media update was successful
+      }
+    }
     
     return baseResponse(res, true, 200, "Media updated successfully", media);
   } catch (error) {
@@ -221,7 +260,8 @@ exports.filterMedia = async (req, res) => {
 exports.getCurrentBillboard = async (req, res) => {
   try {
     const filters = {
-      ageCategory: req.query.ageCategory
+      ageCategory: req.query.ageCategory,
+      mediaType: req.query.mediaType  // Get mediaType from query
     };
     
     const billboard = await mediaRepository.getCurrentBillboard(filters);
@@ -229,6 +269,72 @@ exports.getCurrentBillboard = async (req, res) => {
   } catch (error) {
     console.error("Error retrieving billboard:", error);
     return baseResponse(res, false, 500, "Error retrieving billboard", error.message);
+  }
+};
+
+// Specific controller for movie billboards
+exports.getMovieBillboard = async (req, res) => {
+  try {
+    const filters = {
+      ageCategory: req.query.ageCategory,
+      mediaType: 'movie'  // Specifically for movies
+    };
+    
+    console.log("Fetching movie billboard with filters:", filters);
+    
+    const billboard = await mediaRepository.getCurrentBillboard(filters);
+    
+    console.log(`Found ${billboard.length} movie billboard items`);
+    
+    // Format response to include relevant movie data only
+    const formattedBillboard = billboard.filter(item => item.media && item.media.type === 'movie')
+      .map(item => ({
+        media: item.media,
+        rank: item.rank,
+        totalTickets: item.totalTickets,
+        totalRevenue: item.totalTickets * (item.media.venues && item.media.venues[0]?.price || 0),
+        week: item.week,
+        year: item.year,
+        lastUpdated: item.lastUpdated
+      }));
+    
+    return baseResponse(res, true, 200, "Movie billboard retrieved successfully", formattedBillboard);
+  } catch (error) {
+    console.error("Error retrieving movie billboard:", error);
+    return baseResponse(res, false, 500, "Error retrieving movie billboard", error.message);
+  }
+};
+
+// Specific controller for book billboards
+exports.getBookBillboard = async (req, res) => {
+  try {
+    const filters = {
+      ageCategory: req.query.ageCategory,
+      mediaType: 'book'  // Specifically for books
+    };
+    
+    console.log("Fetching book billboard with filters:", filters);
+    
+    const billboard = await mediaRepository.getCurrentBillboard(filters);
+    
+    console.log(`Found ${billboard.length} book billboard items`);
+    
+    // Format response for books without ticket-related data
+    // Filter to ensure we only get books
+    const formattedBillboard = billboard.filter(item => item.media && item.media.type === 'book')
+      .map(item => ({
+        media: item.media,
+        rank: item.rank,
+        popularity: item.totalTickets, // Rename to popularity instead of tickets for books
+        week: item.week,
+        year: item.year,
+        lastUpdated: item.lastUpdated
+      }));
+    
+    return baseResponse(res, true, 200, "Book billboard retrieved successfully", formattedBillboard);
+  } catch (error) {
+    console.error("Error retrieving book billboard:", error);
+    return baseResponse(res, false, 500, "Error retrieving book billboard", error.message);
   }
 };
 
@@ -338,18 +444,46 @@ exports.getMediaByAgeCategory = async (req, res) => {
 
 exports.getBillboardByWeekAndYear = async (req, res) => {
   try {
-    const { week, year } = req.query;
+    const { week, year, mediaType } = req.query;
     
     if (!week || !year) {
       return baseResponse(res, false, 400, "Week and year are required");
     }
 
-    const billboard = await mediaRepository.getBillboardByWeekAndYear(week, year);
+    // Pass mediaType directly to the repository function
+    let billboard = await mediaRepository.getBillboardByWeekAndYear(week, year, mediaType);
     
     if (billboard.length === 0) {
-      return baseResponse(res, true, 200, "No billboard data found for the specified week and year", []);
+      return baseResponse(res, true, 200, "No billboard data found for the specified criteria", []);
     }
 
+    // Format based on media type
+    if (mediaType === 'book') {
+      // Format response for books
+      const formattedBillboard = billboard.map(item => ({
+        media: item.media,
+        rank: item.rank,
+        popularity: item.totalTickets, // Rename to popularity for books
+        week: item.week,
+        year: item.year,
+        lastUpdated: item.lastUpdated
+      }));
+      return baseResponse(res, true, 200, "Book billboard retrieved successfully", formattedBillboard);
+    } else if (mediaType === 'movie') {
+      // Format response for movies
+      const formattedBillboard = billboard.map(item => ({
+        media: item.media,
+        rank: item.rank,
+        totalTickets: item.totalTickets,
+        totalRevenue: item.totalTickets * (item.media.venues[0]?.price || 0),
+        week: item.week,
+        year: item.year,
+        lastUpdated: item.lastUpdated
+      }));
+      return baseResponse(res, true, 200, "Movie billboard retrieved successfully", formattedBillboard);
+    }
+
+    // Default response if no mediaType filter
     return baseResponse(res, true, 200, "Billboard retrieved successfully", billboard);
   } catch (error) {
     console.error("Error retrieving billboard:", error);

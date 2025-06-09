@@ -20,7 +20,8 @@ const upload = multer({
       cb(null, false);
       return cb(new Error('Only .png, .jpg, .jpeg and .webp format allowed!'));
     }
-  }
+  },
+  limits: { fileSize: 50 * 1024 * 1024 } // Increased to 50MB file size limit
 });
 
 module.exports = upload;

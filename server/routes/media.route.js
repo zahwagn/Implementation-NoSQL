@@ -1,10 +1,18 @@
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const { authenticate, checkAgeRestriction } = require('../middlewares/auth');
 const mediaController = require('../controllers/media.controller');
 
+// Make sure uploads directory exists
+const uploadDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Define multer after ensuring the directory exists
+const multer = require('multer');
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, 'uploads/')
@@ -24,7 +32,7 @@ const upload = multer({
       cb(new Error('Not an image! Please upload only images.'), false);
     }
   },
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB
+  limits: { fileSize: 50 * 1024 * 1024 } // Increased to 50MB
 });
 
 // Public routes (accessible to guests)
@@ -41,8 +49,35 @@ router.get('/', async (req, res, next) => {
   }
 }, mediaController.getAllMedia);
 
-// Billboard routes -  
-router.get('/billboard/current', mediaController.getCurrentBillboard);
+// Billboard routes
+router.get('/billboard/current', mediaController.getCurrentBillboard); // Main billboard endpoint
+// Specialized billboard routes with fallback to main endpoint
+router.get('/billboard/movies', async (req, res) => {
+  try {
+    // Ensure mediaType is set to 'movie'
+    req.query.mediaType = 'movie';
+    return mediaController.getMovieBillboard(req, res);
+  } catch (error) {
+    console.error("Error in movie billboard route:", error);
+    // Fallback to the main billboard with type filter
+    req.query.mediaType = 'movie';
+    return mediaController.getCurrentBillboard(req, res);
+  }
+});
+
+router.get('/billboard/books', async (req, res) => {
+  try {
+    // Ensure mediaType is set to 'book'
+    req.query.mediaType = 'book';
+    return mediaController.getBookBillboard(req, res);
+  } catch (error) {
+    console.error("Error in book billboard route:", error);
+    // Fallback to the main billboard with type filter
+    req.query.mediaType = 'book';
+    return mediaController.getCurrentBillboard(req, res);
+  }
+});
+
 router.get('/billboard/search', mediaController.getBillboardByWeekAndYear);
 
 // Filter route

@@ -79,11 +79,28 @@ exports.getMediaById = async (id, filters = {}) => {
 
 exports.createMedia = async (mediaData) => {
   const media = new Media(mediaData);
-  return await media.save();
+  const savedMedia = await media.save();
+  
+  // Add new media to the current billboard
+  await exports.addMediaToBillboard(savedMedia._id, savedMedia.type);
+  
+  return savedMedia;
 };
 
 exports.updateMedia = async (id, mediaData) => {
-  return await Media.findByIdAndUpdate(id, mediaData, { new: true }).populate('venues');
+  const updatedMedia = await Media.findByIdAndUpdate(id, mediaData, { new: true }).populate('venues');
+  
+  // If the media exists and has a type, update its billboard entry
+  if (updatedMedia && updatedMedia.type) {
+    try {
+      await exports.addMediaToBillboard(updatedMedia._id, updatedMedia.type);
+    } catch (error) {
+      console.error("Error updating billboard entry:", error);
+      // Continue even if billboard update fails
+    }
+  }
+  
+  return updatedMedia;
 };
 
 exports.deleteMedia = async (id) => {
@@ -209,16 +226,73 @@ exports.createVenue = async (venueData) => {
   return venue;
 };
 
+// Function to add media to billboard
+exports.addToBillboard = async (mediaId, mediaType, totalTickets = 0, week, year) => {
+  if (!mediaId || !mediaType) {
+    throw new Error('Media ID and type are required');
+  }
+  
+  // Use current week/year if not provided
+  const currentDate = new Date();
+  const currentWeek = week || Math.ceil((currentDate.getDate() + currentDate.getDay()) / 7);
+  const currentYear = year || currentDate.getFullYear();
+  
+  // Check if media is already on billboard for this week
+  const existingEntry = await Billboard.findOne({
+    media: mediaId,
+    week: currentWeek,
+    year: currentYear
+  });
+  
+  if (existingEntry) {
+    // Update existing billboard entry
+    existingEntry.totalTickets = totalTickets;
+    existingEntry.lastUpdated = currentDate;
+    await existingEntry.save();
+    return existingEntry;
+  } else {
+    // Create new billboard entry
+    const billboardCount = await Billboard.countDocuments({
+      week: currentWeek,
+      year: currentYear,
+      mediaType
+    });
+    
+    const newBillboard = await Billboard.create({
+      media: mediaId,
+      mediaType,
+      totalTickets,
+      week: currentWeek,
+      year: currentYear,
+      rank: billboardCount + 1, // Simple ranking based on current count
+      lastUpdated: currentDate
+    });
+    
+    return newBillboard;
+  }
+};
+
 exports.getCurrentBillboard = async (filters = {}) => {
+  console.log("Getting current billboard with filters:", filters);
+  
   const currentDate = new Date();
   const week = Math.ceil((currentDate.getDate() + currentDate.getDay()) / 7);
   const year = currentDate.getFullYear();
   
-  // Find billboards for current week and year
-  const billboards = await Billboard.find({ 
+  // Build the query based on filters
+  const query = { 
     week: week,
     year: year
-  })
+  };
+  
+  // Add mediaType filter if provided
+  if (filters.mediaType && ['movie', 'book'].includes(filters.mediaType)) {
+    query.mediaType = filters.mediaType;
+    console.log(`Filtering billboard by mediaType: ${filters.mediaType}`);
+  }
+  
+  // Find billboards for current week and year
+  let billboards = await Billboard.find(query)
   .populate({
     path: 'media',
     populate: {
@@ -227,55 +301,116 @@ exports.getCurrentBillboard = async (filters = {}) => {
     }
   })
   .sort({ totalTickets: -1 })
-  .limit(5);
+  .limit(20); // Increased limit to handle more items
+  
+  console.log(`Found ${billboards.length} billboard entries for the current week`);
+  
+  // Filter out entries where media is null (reference to deleted media)
+  billboards = billboards.filter(item => item.media != null);
+  console.log(`After filtering null media: ${billboards.length} entries`);
+  
+  // If we have the right media type filter, ensure we only return that type
+  if (filters.mediaType) {
+    billboards = billboards.filter(item => 
+      item.media && item.media.type === filters.mediaType
+    );
+    console.log(`After filtering by media type: ${billboards.length} entries`);
+  }
 
-  // If no billboards exist for current week
+  // If no billboards exist for current week or the filtered ones are empty
   if (billboards.length === 0) {
-    const topMedia = await Media.find()
-      .sort({ totalTickets: -1 })
-      .limit(5)
+    console.log("No billboard entries found, creating new ones from media collection");
+    
+    // Build media query
+    const mediaQuery = {};
+    if (filters.mediaType) {
+      mediaQuery.type = filters.mediaType;
+    }
+    
+    console.log("Media query:", mediaQuery);
+    
+    const topMedia = await Media.find(mediaQuery)
+      .sort({ totalTickets: -1, createdAt: -1 }) // Sort by tickets and then by creation date
+      .limit(20) // Increased to get more media
       .populate({
         path: 'venues',
         match: { isAvailable: true }
       });
-
+    
+    console.log(`Found ${topMedia.length} media items to create billboard entries for`);
+      
+    // If no media found, return empty array
+    if (topMedia.length === 0) {
+      return [];
+    }
+    
     // Create billboard entries for each media
     const billboardPromises = topMedia.map(async (media, index) => {
-      const billboard = await Billboard.create({
-        media: media._id,
-        totalTickets: media.totalTickets,
-        week: week,
-        year: year,
-        rank: index + 1,
-        lastUpdated: currentDate
-      });
+      // Only create billboard if media has a valid type
+      if (!media.type || !['movie', 'book'].includes(media.type)) {
+        console.log(`Skipping media ${media._id} due to invalid type: ${media.type}`);
+        return null;
+      }
       
-      return {
-        media,
-        rank: billboard.rank,
-        totalTickets: billboard.totalTickets,
-        totalRevenue: media.totalTickets * (media.venues[0]?.price || 0),
-        week: billboard.week,
-        year: billboard.year,
-        lastUpdated: billboard.lastUpdated
-      };
+      console.log(`Creating billboard entry for media ${media._id} (${media.title}) of type ${media.type}`);
+      
+      try {
+        const billboard = await Billboard.create({
+          media: media._id,
+          mediaType: media.type,
+          totalTickets: media.totalTickets || 0,
+          week: week,
+          year: year,
+          rank: index + 1,
+          lastUpdated: currentDate
+        });
+        
+        console.log(`Created billboard entry with rank ${billboard.rank} for ${media.title}`);
+        
+        return {
+          media,
+          mediaType: media.type,
+          rank: billboard.rank,
+          totalTickets: billboard.totalTickets,
+          totalRevenue: billboard.totalTickets * (media.venues && media.venues[0]?.price || 0),
+          popularity: billboard.totalTickets, // Add popularity field for books
+          week: billboard.week,
+          year: billboard.year,
+          lastUpdated: billboard.lastUpdated
+        };
+      } catch (err) {
+        console.error(`Error creating billboard entry for media ${media._id}:`, err);
+        return null;
+      }
     });
 
-    return Promise.all(billboardPromises);
+    try {
+      const results = await Promise.all(billboardPromises);
+      const filteredResults = results.filter(item => item !== null); // Filter out any null entries
+      console.log(`Returning ${filteredResults.length} newly created billboard entries`);
+      return filteredResults;
+    } catch (error) {
+      console.error("Error processing billboard promises:", error);
+      return [];
+    }
   }
 
+  console.log(`Returning ${billboards.length} existing billboard entries`);
+  
   return billboards.map(billboard => ({
     media: billboard.media,
+    mediaType: billboard.mediaType,
     rank: billboard.rank,
     totalTickets: billboard.totalTickets,
-    totalRevenue: billboard.totalTickets * (billboard.media.venues[0]?.price || 0),
+    totalRevenue: billboard.totalTickets * (billboard.media.venues && billboard.media.venues[0]?.price || 0),
+    popularity: billboard.totalTickets, // Add popularity field for books
     week: billboard.week,
     year: billboard.year,
     lastUpdated: billboard.lastUpdated
   }));
 };
 
-exports.getBillboardByWeekAndYear = async (week, year) => {
+exports.getBillboardByWeekAndYear = async (week, year, mediaType = null) => {
   // Validate week and year
   if (!week || !year) {
     throw new Error('Week and year are required');
@@ -286,10 +421,18 @@ exports.getBillboardByWeekAndYear = async (week, year) => {
     throw new Error('Week should be between 1 and 52');
   }
 
-  const billboards = await Billboard.find({ 
+  // Build query
+  const query = { 
     week: Number(week),
     year: Number(year)
-  })
+  };
+  
+  // Add mediaType filter if provided
+  if (mediaType && ['movie', 'book'].includes(mediaType)) {
+    query.mediaType = mediaType;
+  }
+
+  const billboards = await Billboard.find(query)
   .populate({
     path: 'media',
     populate: {
@@ -298,15 +441,99 @@ exports.getBillboardByWeekAndYear = async (week, year) => {
     }
   })
   .sort({ totalTickets: -1 })
-  .limit(5);
+  .limit(10);
 
   return billboards.map(billboard => ({
     media: billboard.media,
+    mediaType: billboard.mediaType,
     rank: billboard.rank,
     totalTickets: billboard.totalTickets,
     totalRevenue: billboard.totalTickets * (billboard.media.venues[0]?.price || 0),
+    popularity: billboard.totalTickets, // Include popularity for books
     week: billboard.week,
     year: billboard.year,
     lastUpdated: billboard.lastUpdated
   }));
+};
+
+// Helper function to update billboard rankings
+const updateBillboardRankings = async (week, year, mediaType) => {
+  // Get all billboards for the given week/year/type
+  const billboards = await Billboard.find({ week, year, mediaType })
+    .sort({ totalTickets: -1 });
+  
+  // Update ranks
+  for (let i = 0; i < billboards.length; i++) {
+    if (billboards[i].rank !== i + 1) {
+      billboards[i].rank = i + 1;
+      await billboards[i].save();
+    }
+  }
+};
+
+exports.addMediaToBillboard = async (mediaId, mediaType) => {
+  try {
+    console.log(`Adding media ${mediaId} of type ${mediaType} to billboard`);
+    
+    // Validate parameters
+    if (!mediaId || !mediaType || !['movie', 'book'].includes(mediaType)) {
+      throw new Error('Valid media ID and type (movie or book) are required');
+    }
+    
+    const media = await Media.findById(mediaId);
+    if (!media) {
+      throw new Error('Media not found');
+    }
+    
+    // Get current week and year
+    const currentDate = new Date();
+    const week = Math.ceil((currentDate.getDate() + currentDate.getDay()) / 7);
+    const year = currentDate.getFullYear();
+    
+    // Check if this media is already in the current billboard
+    let existingBillboard = await Billboard.findOne({
+      media: mediaId,
+      week,
+      year
+    });
+    
+    if (existingBillboard) {
+      console.log(`Updating existing billboard entry for media ${mediaId}`);
+      // Update existing billboard entry and ensure mediaType is correct
+      existingBillboard.mediaType = mediaType; // Ensure mediaType is set correctly
+      existingBillboard.totalTickets = media.totalTickets || 0;
+      existingBillboard.lastUpdated = currentDate;
+      await existingBillboard.save();
+    } else {
+      console.log(`Creating new billboard entry for media ${mediaId}`);
+      // Find the current count of billboard items for this week/year/type to determine rank
+      const billboardCount = await Billboard.countDocuments({
+        mediaType,
+        week,
+        year
+      });
+      
+      // Create new billboard entry
+      existingBillboard = new Billboard({
+        media: mediaId,
+        mediaType,
+        totalTickets: media.totalTickets || 0,
+        week,
+        year,
+        rank: billboardCount + 1,
+        lastUpdated: currentDate
+      });
+      
+      await existingBillboard.save();
+    }
+    
+    // Force re-rank to ensure proper ordering
+    await updateBillboardRankings(week, year, mediaType);
+    
+    // Return the updated or created billboard
+    return existingBillboard;
+  } catch (error) {
+    console.error('Error adding media to billboard:', error);
+    throw error;
+  }
 };
